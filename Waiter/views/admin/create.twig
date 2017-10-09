@@ -1,6 +1,7 @@
 {% extends 'admin/vacation-soup.twig' %}
 {% block content %}
     <input type="hidden" id="nextMOTD" class="persist" name="SoupWaiter.nextMOTD" value="{{ soup.nextMOTD }}">
+    <input type="hidden" id="next_topic" class="persist" name="SoupWaiter.next_topic" value="{{ soup.next_topic }}">
 
     <script>
     // Global so they can be accessed when needed (including in pixabay-images)
@@ -15,21 +16,20 @@
     var getMOTD = function() {
         jQuery('#motd').addClass("checking");
 
-        var page = jQuery('INPUT[name="SoupWaiter.nextMOTD"]').val();
+        var offset = jQuery('#nextMOTD');
         jQuery.ajax({
             type: "get",
             dataType: "json",
             context: this,
-            url: '{{ soup.kitchen_api~'/motd/' }}',
+            url: '{{ soup.kitchen_host~'/'~soup.kitchen_api~'/motd/' }}',
             data: {
                 per_page: 1,
-                page: page
+                offset: offset.val()
             }
         }).statusCode({
             400: function(){ // This means we have gone past the end of the list
-                var page = jQuery('INPUT[name="SoupWaiter.nextMOTD"]');
-                if (page.val() !== 1){ // reset back to the start
-                    page.val(1);
+                if (offset.val() !== 0){ // reset back to the start
+                    offset.val(0).change();
                     return getMOTD();
                 }
             }
@@ -38,11 +38,15 @@
             if (response.error) {
                 html = '<p>Error: Waiter failed to contact Kitchen</p>' + response.error.message;
             } else {
-                var page = jQuery('INPUT[name="SoupWaiter.nextMOTD"]');
                 if (response.length) {
-                    page.val(parseInt(page.val()) + 1).change();
+                    offset.val(parseInt(offset.val()) + 1).change();
                     var title = '<h1 id="title">'+response[0].title.rendered+'</h1>';
                     motd.html(title+response[0].content.rendered);
+                } else { // Must have gone past the end
+                    if (offset.val() !== 0){ // reset back to the start
+                        offset.val(0).change();
+                        return getMOTD();
+                    }
                 }
             }
         }).always(function (response) {
@@ -50,18 +54,31 @@
         });
     }
 
+    const topicsPerPage = 5;
+    var topicPageAdvanced = false;
+    var binEndTopics = []; // temprary storage of last few topics to recycle them
     var getTrendingTopics = function(){
         jQuery('#trending-topics').addClass("checking").html('');
+        jQuery('#topic-refresh').addClass('active');
+        var offset = jQuery('#next_topic');
         jQuery.ajax({
             type: "get",
             dataType: "json",
             context: this,
-            url: '{{ soup.kitchen_api~'/topic/' }}',
+            url: '{{ soup.kitchen_host~'/'~soup.kitchen_api~'/topic/' }}',
             data: {
+                offset: offset.val(),
+                per_page: topicsPerPage - binEndTopics.length,
                 exclude: {{ recent_topics|json_encode }}
             }
-        }).always(function(jqXHR,status,error) {
-            jQuery("#trending-topics").removeClass("checking");
+        }).statusCode({
+            400: function(){ // Bad Params: normally means we have gone past the end of the list
+                var offset = jQuery('#next_topic');
+                if (offset.val() !== 0){ // reset back to the start, but only once
+                    offset.val(0);
+                    return getTrendingTopics();
+                }
+            }
         }).fail(function(jqXHR,status,error) {
             alert('Error: Waiter failed to contact Kitchen\n'+error);
         }).done(function(response) {
@@ -69,7 +86,33 @@
             if (response.error) {
                 html = '<p>Error: Waiter failed to contact Kitchen</p>'+response.error.message;
             } else {
-                response.forEach(function(topic){
+                // Handle paging of topics from Kitchen
+                if (0 === response.length){ // Past the last page of topics
+                    if (parseInt(offset.val()) !== 0){ // reset back to the start
+                        offset.val(0);
+                        return getTrendingTopics();
+                    } else return null;  // if offset was 0 and no recs returned.
+                } else {
+                    // Only update pageAdvanced marker if we have a full page
+                    if (0===binEndTopics.length){
+                        topicPageAdvanced = parseInt(offset.val());
+                    }
+                    // If less than a full page, and not first page
+                    if (topicsPerPage !== response.length && 0!==parseInt(offset.val())){ // less than a full page
+                        offset.val(0);
+                        binEndTopics = response; // These will be added to the next lot
+                        return getTrendingTopics();
+                    }
+                    var next_topic = parseInt(offset.val())+(topicsPerPage - binEndTopics.length);
+                    offset.val(next_topic).change();
+                    if (binEndTopics.length){
+                        response = binEndTopics.concat(response);
+                        binEndTopics = [];
+                    }
+                }
+                k_topics=[];
+                k_tags=[];
+                response.forEach(function(topic){ // Create k_topics and k_tags (deduped tag_id list)
                     k_topics.push(topic);
                     topic.tags.forEach(function(tag){
                         if(jQuery.inArray(tag, k_tags) === -1) k_tags.push(tag);
@@ -79,13 +122,14 @@
                     type: "get",
                     dataType: "json",
                     context: this,
-                    url: '{{ soup.kitchen_api~'/tags/' }}',
+                    url: '{{ soup.kitchen_host~'/'~soup.kitchen_api~'/tags/' }}',
                     data: {
                         include: k_tags.sort(),
-                        per_page: 100
+                        per_page: k_tags.length
                     }
                 }).always(function(jqXHR,status,error) {
                     jQuery("#trending-topics").removeClass("checking");
+                    jQuery('#topic-refresh').removeClass('active');
                 }).fail(function(jqXHR,status,error) {
                     alert('Error: Waiter failed to contact Kitchen\n'+error);
                 }).done(function(response) {
@@ -107,11 +151,13 @@
                         topic.title.raw = elem.value;
                         $input = '<input type="radio" name="trending_topics" id="topic_'+i+'" value="'+i+'" onchange="chooseTopic(jQuery(this).val())"/>';
                         if (topic.id !== 0){
-                            location = ' {{ admin.join }} {{ admin.destination }}';
+                            location = ' {{ soup.destination.rendered }}';
                         }
                         $label = '<label for="topic_'+i+'">'+topic.title.rendered+location+'</label>';
                         jQuery("#trending-topics").append('<li>'+$input+$label+'</li>');
                     });
+
+
                     var randomTopic = Math.floor((Math.random() * (k_topics.length-1)));
                     jQuery('INPUT[name="trending_topics"]')[randomTopic].checked = true;
                     chooseTopic(randomTopic);
@@ -139,7 +185,7 @@
             vs_query = topic.tags.map(function (tag) {
                 return k_tags[tag].name
             });
-            vs_title = topic.title.raw + ' ' + '{{ admin.join }}' + ' ' + '{{ admin.destination }}';
+            vs_title = topic.title.raw + ' ' + '{{ soup.destination.rendered }}';
             jQuery('#post_title').prop('autofocus',false).val(vs_title);
             jQuery('INPUT[name="topic"]').val(topic.id);
         } else {
@@ -204,7 +250,13 @@
                 jQuery("#-add_media").click();
             }
         });
-
+        jQuery('#alter-destination').change(function(){
+            if (false!==topicPageAdvanced){
+                var offset = jQuery('#next_topic');
+                offset.val(topicPageAdvanced).change();
+            }
+            window.location.search += '&destination_id='+this.options[this.selectedIndex].value
+        });
     });
 
 
@@ -215,9 +267,15 @@
     <div class="col-xs-12 col-sm-6 col-lg-8">
         <div class="vs-panel row">
             <div id="title" class="col-sm-12">
-                <h1>Create Post</h1>
+                <h1>Create Post
+                    <select title="Alternative destinations" id="alter-destination">
+                        {% for destination in soup.destinations %}
+                            <option value="{{ destination.id }}" {{ (destination.id == soup.current_destination)?'selected':'' }}>{{ destination.rendered }}</option>
+                        {% endfor %}
+                    </select>
+                </h1>
             </div>
-            <div class="col-sm-8">
+            <div class="col-xl-8 col-lg-6 col-md-12 col-sm-12">
                 <p>Select one of the trending post subjects on the right, or create your own. Ideally post 3 <strong>trending searches</strong> a week to feed the search engines optimally.</p>
                 <div class="vs-panel row">
                     <div id="motd" class="col-sm-12">
@@ -225,19 +283,14 @@
                     </div>
                 </div>
             </div>
-            <div class="col-sm-4 float-right">
-                <h2>Trending searches</h2>
+            <div class="col-xl-4 col-lg-6 col-md-12 col-sm-12 float-right">
+                <h2>Trending searches <i id="topic-refresh" class="fa fa-refresh" onclick="getTrendingTopics()"></i></h2>
                 <ul id="trending-topics" class="hoverable">
                 </ul>
             </div>
             <div class="col-sm-12">
                 <div class="subject">
-                    <h2>
-                        <label for="post_title">
-                            Subject
-                        </label>
-                    </h2>
-                    <input type="text" name="post_title" id="post_title" value=""/>
+                    <input type="text" title="Subject" name="post_title" id="post_title" value=""/>
                 </div>
             </div>
             <div class="col-sm-12">

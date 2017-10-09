@@ -18,6 +18,9 @@
                     });
                     return s;
                 }
+                String.prototype.punctToSpace = function () {
+                    return this.replace(/[^A-Za-z0-9_]/g," ");
+                }
                 var handleChange = function(id){
                     var title;
                     var destVal = jQuery("#destination-"+id).val();
@@ -33,9 +36,9 @@
 
                     var target = jQuery("#examples-"+id);
                     target.html('');
-                    destVal = destVal.ToCamelCase();
-                    joinVal = joinVal.ToCamelCase();
-                    titleVal = titleVal.ToCamelCase();
+                    destVal = destVal.punctToSpace().ToCamelCase();
+                    joinVal = joinVal.punctToSpace().ToCamelCase();
+                    titleVal = titleVal.punctToSpace().ToCamelCase();
                     if (destVal && joinVal && titleVal){
                         target.html(
                             "The following tags will be added to all posts:<br/>"+

@@ -5,33 +5,45 @@
 {% block form_content %}
     <script>
         jQuery(function() {
-            var doServiceCheck = function () {
-                jQuery('#servicecheck').addClass("checking").html('');
-                var ServiceAjaxCall = {
-                    type: "post",
-                    dataType: "json",
-                    context: this,
-                    url: ajaxurl,
-                    data: {
-                        action: "servicecheck",
-                        _vs_nonce: jQuery('INPUT[name="_vs_nonce"]').val()
-                    }
-                };
-                jQuery.ajax(ServiceAjaxCall)
-                    .fail(function (jqXHR, status, error) {
-                        console.log('fail (vacation-soup) ' + status + ' ' + error);
-                        alert('Error: Could not connect to Wordpress\n' + status);
-                    })
-                    .done(function (response) {
-                        if (response.error) {
-                            jQuery('#servicecheck').html('<h2>An <span class="inactive">Error</span> occurred</h2>' + response.error.message);
-                        } else {
-                            jQuery('#servicecheck').removeClass("checking").html(response.html);
+            var doAllServiceChecks = function(){
+                jQuery(".servicecheck").each(function () {
+
+                    jQuery(this).addClass("checking").removeClass("ok nok")
+                        .find('I')
+                        .removeClass('fa-check fa-chain-broken fa-question');
+                    var ServiceAjaxCall = {
+                        type: "post",
+                        dataType: "json",
+                        context: this,
+                        url: ajaxurl,
+                        data: {
+                            action: "servicecheck",
+                            _vs_nonce: jQuery('INPUT[name="_vs_nonce"]').val(),
+                            service: jQuery(this).data('service')
                         }
-                    });
+                    };
+                    jQuery.ajax(ServiceAjaxCall)
+                        .fail(function (jqXHR, status, error) {
+                            console.log('fail (vacation-soup) ' + status + ' ' + error);
+                            jQuery(this).addClass('nok')
+                                .find('I')
+                                .removeClass('fa-question')
+                                .addClass('fa-chain-broken');
+                        })
+                        .done(function (response) {
+                            faIcon = (response.status=='ok')?'fa-check':'fa-chain-broken';
+                            jQuery(this).addClass(response.status)
+                                .find('I')
+                                .removeClass('fa-question')
+                                .addClass(faIcon);
+                        })
+                        .always(function(){
+                            jQuery(this).removeClass("checking");
+                        });
+                });
             }
-            jQuery('.soup-icon').click(doServiceCheck);
-            doServiceCheck();
+            jQuery('.soup-icon').click(doAllServiceChecks);
+            doAllServiceChecks();
         });
     </script>
 
@@ -84,12 +96,26 @@
             </div>
 
             <div id="servicecheck" class="soup-status col-sm-8">
-                <p>Service check is not running</p>
+                {% for handle,service in admin.services['basic'] %}
+                    <div class="servicecheck" data-service="{{ handle }}">
+                        {{ service['url']? "<a href='"~service['url']~"'>":"" }}
+                        <i class="fa fa-question"></i><span>{{ service['title'] }}</span>
+                        {{ service['url']? "</a>":"" }}
+                    </div>
+                {% endfor %}
+                <h2>Premium services</h2>
+                {% for handle,service in admin.services['premium'] %}
+                    <div class="servicecheck" data-service="{{ handle }}">
+                        {{ service['url']? "<a href='"~service['url']~"'>":"" }}
+                        <i class="fa fa-question"></i><span>{{ service['title'] }}</span>
+                        {{ service['url']? "</a>":"" }}
+                    </div>
+                {% endfor %}
             </div>
         </div>
         <div id="connect-params" class="vs-panel row field-container">
             <div id="title" class="col-sm-12">
-                <h1>Vacation Soup HQ Settings</h1>
+                <h1>The Soup Settings</h1>
                 <p>You should not change these values unless advised to do so by a member of the Vacation Soup team.</p>
                 <div class="field">
                     <label for="kitchen_host">

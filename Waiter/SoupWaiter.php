@@ -44,10 +44,32 @@ class SoupWaiter extends SitePersistedSingleton {
      */
     protected $nextMOTD;
     /**
-     * @var number $nextMOTD the next MOTD page to request
+     * @var number $next_topic the next topic item (offset from 0)
+     */
+    protected $next_topic;
+    /**
+     * @var number $property_count The number of properties
      */
     protected $property_count;
+    /**
+     * @var string[] $joins the Joining words to use in topics (first is default), e.g. Best beaches ON Bornholm
+     */
+    protected $joins;
+    /**
+     * @var string[] $destinations the Joining words to use in topics (first is default), e.g. Best beaches on BORNHOLM
+     */
+    protected $destinations;
 
+    protected function get_current_destination(){
+        $id=0; // Default
+        if (isset($_REQUEST['destination_id'])){
+            $id = $_REQUEST['destination_id'];
+        }
+        return $id;
+    }
+    protected function get_destination(){
+        return $this->destinations[$this->get_current_destination()];
+    }
 
     /**
 	 * Expose whether the Kitchen is up
@@ -81,25 +103,14 @@ class SoupWaiter extends SitePersistedSingleton {
 		return $this->get_base_url('img');
 	}
 	/**
-	 * @return string
-	 */
-	protected function get_social_api(){
-		return "{$this->kitchen_host}/{$this->social_api}";
-	}
-	/**
-	 * @return string
-	 */
-	protected function get_kitchen_api(){
-		return "{$this->kitchen_host}/{$this->kitchen_api}";
-	}
-	/**
 	 * SoupWaiter constructor.
 	 */
 	public function __construct(){
 		$this->set_kitchen_host('https://core.vacationsoup.com'); # 'https://staging1.privy2.com';#
 		$this->kitchen_api = 'wp-json/wp/v2';
 		$this->kitchen_jwt_api = 'wp-json/jwt-auth/v1';
-        $this->nextMOTD = 1;
+        $this->nextMOTD = 0;
+        $this->next_topic = 0; // This is an offset, not a page number
         $this->property_count = 0;
 	}
 

@@ -10,13 +10,15 @@ namespace Waiter;
 class Multiton extends Base  {
     protected $id;
     protected $created;
+
+
     /**
      * Get a singleton of this class.
      *
      * @param $key string
      * @return mixed
      */
-	static function find($key){
+	static function findOne($key){
 		static $single = [];
 		$class = get_called_class();
 
@@ -34,9 +36,8 @@ class Multiton extends Base  {
 		return $single[$class][$key];
 	}
 	protected function registerMultiton($key){
-	    // expected to get overlayed by child
+	    // may get overlayed by child
         $this->id = $key;
         $this->created = true;
     }
-
 }

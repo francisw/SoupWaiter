@@ -14,14 +14,6 @@ require_once( ABSPATH . 'wp-includes/pluggable.php' );
  */
 class SoupWaiterAdmin extends SitePersistedSingleton {
 	/**
-	 * @var string[] $joins the Joining words to use in topics (first is default), e.g. Best beaches ON Bornholm
-	 */
-	protected $joins;
-	/**
-	 * @var string[] $destinations the Joining words to use in topics (first is default), e.g. Best beaches on BORNHOLM
-	 */
-	protected $destinations;
-	/**
 	 * @var boolean $hasFeaturedImages
 	 */
 	protected $hasFeaturedImages;
@@ -114,12 +106,13 @@ class SoupWaiterAdmin extends SitePersistedSingleton {
                                 $obj = $class::single();
                             } else throw new \Exception("Class '{$class}' must be a Singleton, as no ID provided");
                         } else {
-                            if (method_exists($class,'find')){
-                                $obj = $class::find($id);
+                            if (method_exists($class,'findOne')){
+                                $obj = $class::findOne($id);
                             } else throw new \Exception("Class '{$class}' must be a Multiton, as ID provided");
                         }
 						$obj->$attr = $_REQUEST['value'];  // Objects can throw, e.g. if $key or value invalid
 						$response['success'] = true;
+						$response[$_REQUEST['name']] = $obj->$attr;
 					} else throw new \Exception("Class '{$class}' not found'");
 				}
 			} catch (\Exception $e){
@@ -132,35 +125,124 @@ class SoupWaiterAdmin extends SitePersistedSingleton {
 				];
 			}
 		} else {
-			$response['error'] = 'not for me';
+			$response['error'] = ['message'=>'not for me','code'=>0];
 		}
 		header("Content-type: application/json");
 		echo json_encode($response);
 		wp_die();
 	}
-	// debug function to hook into above
-	public function dont_connect_ajax(){
-		$obj = SoupWaiter::single();
-		$obj->debug = 'My Old Value';
-		$obj->persist();
-		return ['success'=>true];
-	}
 
-	public function do_servicecheck(){
+	protected function fail_service_stub(){
+	    return false;
+    }
+
+    protected function get_service($handle){
+	    $groupedServices = $this->get_services();
+	    foreach ($groupedServices as $group => $services){
+	        if (isset($services[$handle])){
+	            return $services[$handle];
+            }
+        }
+        return null;
+    }
+	protected function get_services(){
+	    return
+            [
+                "basic"=>[
+                    "auth" => [
+                        "type" =>   "prop",
+                        "title"=>   "Authorisation",
+                        "prop"=>    [SoupWaiter::single(),'connected']
+                    ],
+                    "post-kitchen" => [
+                        "type" =>   "func",
+                        "title"=>   "Soup Syndication",
+                        "call"=>    [$this,'fail_service_stub']
+                    ],
+                    "post-social" => [
+                        "type" =>   "func",
+                        "title"=>   "Social Posting",
+                        "call"=>    [$this,'fail_service_stub']
+                    ],
+                    "vacation-soup" => [
+                        "type" =>   "func",
+                        "title"=>   "Vacation Soup",
+                        "call"=>    [$this,'fail_service_stub']
+                    ],
+                    "community" => [
+                        "type" =>   "func",
+                        "title" =>   "Community",
+                        "url" => "https://community.vacationsoup.com",
+                        "call"=>    [$this,'fail_service_stub']
+                    ]
+                ],
+                "premium"=> [
+                    "soup-trade" => [
+                        "type" =>   "func",
+                        "title" =>   "Soup Sending Bookers",
+                        "call"=>    [$this,'fail_service_stub']
+                    ],
+                    "learn" => [
+                        "type" =>   "func",
+                        "title" =>   "Learning Centre",
+                        "url" => "https://learn.vacationsoup.com",
+                        "call"=>    [$this,'fail_service_stub']
+                    ],
+                    "full-publication" => [
+                        "type" =>   "func",
+                        "title" =>   "Soup Advertising",
+                        "url" => "https://community.vacationsoup.com",
+                        "call"=>    [$this,'fail_service_stub']
+                    ]
+                ]
+            ];
+
+    }
+
+    /**
+     * Ajax call to check a particular service
+     *
+     * Initially designed as a framework to support replacing the values here with Kitchen supplied values
+     * if needed, so the kitchen can re-direct some services if needed.
+     *
+     */
+    public function do_servicecheck(){
 		header("Content-type: application/json");
 		try {
-			$services['Authorisation'] = [ 'status'=> SoupWaiter::single()->connected ];
-			$services['Post Syndication'] = [ 'status'=> false ];
-			$services['Property Social Syndication'] = [ 'status'=> false ];
-			$services['Main Vacation Soup site'] = [ 'status'=> false ];
-			$services['Community'] = [ 'status'=> false ];
-			$premiumServices['Referral to your site'] = [ 'status'=> false ];
-			$premiumServices['Learning Centre'] = [ 'status'=> false ];
-			$premiumServices['Soup Social Syndication'] = [ 'status'=> false ];
-			echo json_encode([
-				'success' => true,
-				'html' => Timber::compile( array( "admin/servicecheck.twig" ), compact('services','premiumServices'))
-			]);
+            $result = [
+                'success' => true,  // Default to ajax call success
+                'status' => 'nok'   // default to failed service test
+			];
+            $service = $this->get_service($_REQUEST["service"]);
+            if (!$service){
+                throw new \Exception("Service unknown: {$_REQUEST["service"]}");
+            }
+            switch($service["type"]){
+                case "group":
+                    $result["group"] = $service["group"];
+                    break;
+                case "func":
+                    $method = $service["call"][1];
+                    $object = $service["call"][0];
+                    if (!method_exists($object,$method)){
+                        throw new \Exception("Service check error: {$object}->{$method} not found");
+                    }
+                    if ($object->$method()){
+                        $result["status"] = 'ok';
+                    }
+                    break;
+                case "prop":
+                    $prop = $service["prop"][1];
+                    $object = $service["prop"][0];
+                    if ($object->$prop){
+                        $result["status"] = 'ok';
+                    }
+                    break;
+            }
+            if (isset($service["url"])){
+                $result["url"] = $service["url"];
+            }
+			echo json_encode($result);
 		} catch (\Exception $e){
 			echo json_encode([
 				'success' => false,
@@ -259,7 +341,7 @@ class SoupWaiterAdmin extends SitePersistedSingleton {
 			set_post_thumbnail($postId,$_POST['featured_image']);
 			update_post_meta($postId,'topic',$_POST['topic']);
 		}
-		$this->persist();
+		// $this->persist(); // Don't know why we were persisting SoupWaiterAdmin, not needed, not here anyway
 		return null; // Causes a fall-through to create the page anyway, as we are not redirecting after persistence
 	}
 	/**
@@ -277,16 +359,6 @@ class SoupWaiterAdmin extends SitePersistedSingleton {
 		return $context;
 	}
 
-    protected function get_join(){
-        return Property::find(0)->join;
-    }
-    protected function get_destination(){
-        $dest = Property::find(0)->destination;
-        if (empty($dest)){
-            $dest = "Somewhere";
-        }
-        return $dest;
-    }
 	/**
 	 * @returns mixed[] The context for this tab
 	 */
@@ -296,13 +368,19 @@ class SoupWaiterAdmin extends SitePersistedSingleton {
 
 		// Available Tags for all posts
         // In case the destination is multiple words
-        $destination = '';
-        foreach (explode(' ',Property::find(0)->destination) as $word){
-            $destination .= ucfirst($word);
+        $destination = SoupWaiter::single()->destination;
+        $render = '';
+        foreach (explode(' ',preg_replace('/[^a-z0-9]+/i', ' ', $destination['rendered'])) as $word){
+            $render .= ucfirst($word);
         }
-        $context['permTags'] = ['VacationSoup',$destination];
+        $dest = '';
+        foreach (explode(' ',preg_replace('/[^a-z0-9]+/i', ' ', $destination['destination'])) as $word){
+            $dest .= ucfirst($word);
+        }
+
+        $context['permTags'] = ['VacationSoup',$dest];
         foreach (['Holiday','Vacation'] as $holiday){
-            $context['permTags'][] = $holiday.ucfirst($this->join).$destination;
+            $context['permTags'][] = $holiday.$render;
         }
 
 		$args = array(
@@ -360,27 +438,51 @@ class SoupWaiterAdmin extends SitePersistedSingleton {
 
 		return $context;
 	}
+
+    /**
+     * @return array of Properties
+     * Also populates the SoupWaiter::single()->properties
+     */
+	private function get_properties(){
+        $propertyCount = SoupWaiter::single()->property_count;
+        $properties = [];
+        $destinations = []; // Might as well set these up too
+        $dCount = 0;
+
+        for ($i=0;$i<($propertyCount);$i++){
+            $property = Property::findOne($i);
+            $properties[] = $property;
+            if (isset($property->destination)){
+                $destinations[$dCount] = ['id'=>$dCount,'rendered'=>"{$property->join} {$property->destination}",'destination'=>"{$property->destination}"];
+                $dCount++;
+            }
+
+        }
+        sort(array_unique($destinations));
+        SoupWaiter::single()->destinations = $destinations;
+        return $properties;
+    }
+
 	/**
 	 * @returns mixed[] The context for this tab
 	 */
 	private function get_property_context(){
 		// Grab the basics
 		$context = $this->get_context('property');
-
+        $properties = $this->get_properties();
 		$newAllowed = 1;
-		$propertyCount = SoupWaiter::single()->property_count;
-		if ($propertyCount >= 10){
+		if (count($properties) >= 10){
 		    $newAllowed = 0;
         }
-        for ($i=0;$i<($propertyCount);$i++){
-            $property = Property::find($i);
+        for ($i=0;$i<(count($properties));$i++){
+            $property = $properties[$i];
             if (empty($property->title)){ // Then this will be the 'New' property
                 $newAllowed = 0;
             }
-            $context['properties'][] = $property;
         }
+        $context['properties'] = $properties;
         if ($newAllowed){
-            $context['properties'][] = Property::find($i);
+            $context['properties'][] = Property::findOne($i);
         }
 
 		return $context;

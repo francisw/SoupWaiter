@@ -29,6 +29,7 @@
     padding-left: 10px;
     padding-bottom: 13px;
     line-height: 1.2em;
+    font-size: 1.6em;
 }
 
 .vs-panel .vs-panel H1 {
@@ -40,22 +41,34 @@ ARTICLE.tease {
     padding-bottom: 2px;
     padding-top: 2px;
 }
-ARTICLE.tease H2 {
+ARTICLE.tease H4 {
     margin-top: 0;
+    margin-bottom: 0;
     width: 100%;
     display: inline-block;
 }
 ARTICLE.tease P {
-    margin-top: 0;
+    margin-top: 5px;
+    margin-bottom: 5px;
 }
 ARTICLE.tease .align-left {
     float: left;
 }
 ARTICLE.tease .align-right {
     float: right;
+    vertical-align: text-bottom;
+    margin-left: 10px;
 }
 ARTICLE.tease .clear {
     clear: both;
+}
+
+DIV.img {
+    padding-right: 0;
+
+}
+.tease IMG {
+    width: 100%;
 }
 
 #motd IMG {
@@ -79,12 +92,13 @@ DIV.subject {
     width: 100%;
 }
 DIV.subject INPUT {
-    font-size: 3vw;
+    font-size: 1.6em;
     border: 0;
     box-shadow: none;
     width: 100%;
     padding-right: 20px;
     margin-bottom: 15px;
+    background-color: rgba(0,0,0,0.15);
 }
 
 DIV.subject INPUT:focus {
@@ -170,15 +184,6 @@ DIV.media-selector {
     margin: 10px 0;
 }
 
-.tease DIV.img {
-    min-width: 100px;
-    min-height: 100px;
-}
-.tease IMG {
-    width: 100%;
-    min-width: 100px;
-    min-height: 100px;
-}
 DIV.field LABEL{
     min-width: 30%;
     display: inline-block;
@@ -407,7 +412,19 @@ DIV.social-container.currently-editing DIV.field-container INPUT
     background: url(../img/loading.svg) center no-repeat;
 }
 #trending-topics {
-    min-height: 50px;
+    min-height: 300px;
+}
+#trending-topics LI INPUT[type="checkbox"]{
+    border-radius: 30%;
+    display: inline-block;
+    vertical-align: middle;
+    max-width: 10%;
+}
+#trending-topics LI LABEL{
+    display: inline-block;
+    vertical-align: middle;
+    width: 80%;
+    margin-left: 5%;
 }
 .tab-property DIV.field INPUT[type="text"].join-word {
     max-width: 30px;
@@ -415,4 +432,39 @@ DIV.social-container.currently-editing DIV.field-container INPUT
 }
 .tab-property DIV.field LABEL {
     display: block;
+}
+.servicecheck.checking {
+    background-position: left;
+}
+
+.servicecheck I {
+    color: rgba(0, 0, 0, 0.2);
+    min-width: 35px;
+}
+.servicecheck.ok I {
+    color: rgba(0, 150, 0, 1.0);
+}
+.servicecheck.nok I {
+    color: rgba(200, 0, 0, 1.0);
+}
+#alter-destination {
+    font-size: inherit;
+    height: inherit;
+    background: inherit;
+    background-color: rgba(255,255,255,0.3);
+    vertical-align: inherit;
+    margin-top: -1px;
+    margin-bottom: -1px;
+}
+
+I.fa-refresh {
+    cursor: pointer;
+    color: rgba(0,0,0,0.4);
+    transition: transform 0.5s ease 0s;
+}
+I.fa-refresh:hover {
+    color: rgba(0,0,100,0.7);
+}
+I.fa-refresh.active {
+    transform: rotate(180deg);
 }
